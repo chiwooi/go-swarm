@@ -15,6 +15,7 @@ type RunOptions struct {
 var DefRunOptions = RunOptions{
    Model:    "",
    MaxTurns: 9999,
+   ExecuteTools: true,
    Debug:    true,
 }
 

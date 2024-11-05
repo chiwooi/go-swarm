@@ -3,6 +3,8 @@ package goswarm
 import (
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -54,10 +56,14 @@ func functionToJSON(f interface{}) (openai.ChatCompletionToolParam, error) {
 		required = append(required, paramName)
 	}
 
+	fnVal := reflect.ValueOf(f)
+	fnName := runtime.FuncForPC(fnVal.Pointer()).Name()
+	fnName = funcNameNormalization(fnName)
+
 	result := openai.ChatCompletionToolParam{
 		Type: openai.F(openai.ChatCompletionToolTypeFunction),
 		Function: openai.F(openai.FunctionDefinitionParam{
-			Name:        openai.String(funcType.Name()),
+			Name:        openai.String(fnName),
 			Description: openai.String("Function signature"), // TODO: 함수 설명 부 추출방법이 없어서 임시로 이렇게 처리
 			Parameters: openai.F(openai.FunctionParameters{
 				"type":       "object",
@@ -113,4 +119,9 @@ func callFuncByArgs(f any, args Args) any {
 	}
 
 	return out[0].Interface()
+}
+
+// go 함수 "." 문자를 "_"문자로 변환
+func funcNameNormalization(name string) string {
+	return strings.ReplaceAll(name, ".", "_")
 }

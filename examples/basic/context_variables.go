@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 
 	"github.com/chiwooi/go-swarm"
 )
@@ -20,7 +19,7 @@ func PrintAccountDetails(args goswarm.Args) string {
 	return "Success"
 }
 
-func main() {
+func main2() {
 	oai := openai.NewClient()
 
 	agent := goswarm.Agent{
@@ -31,7 +30,11 @@ func main() {
 	}
 
 	client := goswarm.NewSwarm(oai)
-	resp := client.Run(agent, []openai.ChatCompletionMessageParamUnion{openai.UserMessage("Hi!")}, goswarm.Args{"name": "James", "user_id": 123})
+
+	messages := []openai.ChatCompletionMessageParamUnion{}
+	messages = append(messages, openai.UserMessage("Hi!"))
+
+	resp := client.Run(agent, messages, goswarm.Args{"name": "James", "user_id": 123})
 
 	if len(resp.Messages) > 0 {
 		fmt.Println(resp.Messages[0].(openai.ChatCompletionMessage).Content)

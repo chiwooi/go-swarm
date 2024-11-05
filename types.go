@@ -14,7 +14,7 @@ func (a Args) Get(key string, defaultValue any) any {
 }
 
 // AgentFunction is a type alias for functions that return either a string, an Agent, or a map.
-type AgentFunction func(args Args) string
+type AgentFunction any
 
 // Agent represents an agent with various attributes, including name, model, instructions, and functions.
 type Agent struct {

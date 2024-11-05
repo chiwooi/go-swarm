@@ -139,8 +139,9 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 	functionMap := make(map[string]AgentFunction)
 	for _, f := range functions {
 		fnVal := reflect.ValueOf(f)
-		name := runtime.FuncForPC(fnVal.Pointer()).Name()
-		functionMap[name] = f
+		fnName := runtime.FuncForPC(fnVal.Pointer()).Name()
+		fnName = funcNameNormalization(fnName)
+		functionMap[fnName] = f
 	}
 
 	partialResponse := Response{
@@ -302,7 +303,7 @@ func (s *Swarm) Run(agent Agent, messages []openai.ChatCompletionMessageParamUni
 
 		message := completion.Choices[0].Message
 		if args.Debug {
-			fmt.Println("Received completion:", message)
+			fmt.Printf("Received completion: %+v\n", message)
 		}
 		// message.Sender = activeAgent.Name
 		history = append(history, message)
