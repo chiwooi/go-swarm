@@ -416,12 +416,7 @@ repl.RunDemoLoop(agent, types.Args{}, option.WithStreamOption(true))
 
 # Core Contributors
 
-- Ilan Bigio - [ibigio](https://github.com/ibigio)
-- James Hills - [jhills20](https://github.com/jhills20)
-- Shyamal Anadkat - [shyamal-anadkat](https://github.com/shyamal-anadkat)
-- Charu Jaiswal - [charuj](https://github.com/charuj)
-- Colin Jarvis - [colin-openai](https://github.com/colin-openai)
-- Katia Gil Guzman - [katia-openai](https://github.com/katia-openai)
+- chiwoo - [ibigio](https://github.com/chiwooi)
 
 
 
