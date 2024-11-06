@@ -1,4 +1,4 @@
-types.go package goswarm
+package goswarm
 
 import (
 	"github.com/openai/openai-go"
