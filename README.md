@@ -175,37 +175,41 @@ While it's tempting to personify an `Agent` as "someone who does X", it can also
 | Field            | Type                     | Description                                                                   | Default                      |
 | ---------------- | ------------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
 | **name**         | `str`                    | The name of the agent.                                                        | `"Agent"`                    |
-| **model**        | `str`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
-| **instructions** | `str` or `func() -> str` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
-| **functions**    | `List`                   | A list of functions that the agent can call.                                  | `[]`                         |
-| **tool_choice**  | `str`                    | The tool choice for the agent, if any.                                        | `None`                       |
+| **option.WithAgentModel()**        | `str`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
+| **option.WithAgentInstructions()** | `str` or `func() -> str` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
+| **option.WithAgentFunctions()**    | `List`                   | A list of functions that the agent can call.                                  | `[]`                         |
+| **option.WithAgentToolChoice()**  | `str`                    | The tool choice for the agent, if any.                                        | `None`                       |
 
 ### Instructions
 
 `Agent` `instructions` are directly converted into the `system` prompt of a conversation (as the first message). Only the `instructions` of the active `Agent` will be present at any given time (e.g. if there is an `Agent` handoff, the `system` prompt will change, but the chat history will not.)
 
-```python
-agent = Agent(
-   instructions="You are a helpful agent."
+```go
+agent := goswarm.NewAgent(
+   option.WithAgentInstructions("You are a helpful agent."),
 )
 ```
 
 The `instructions` can either be a regular `str`, or a function that returns a `str`. The function can optionally receive a `context_variables` parameter, which will be populated by the `context_variables` passed into `client.run()`.
 
-```python
-def instructions(context_variables):
-   user_name = context_variables["user_name"]
-   return f"Help the user, {user_name}, do whatever they want."
+```go
 
-agent = Agent(
-   instructions=instructions
-)
-response = client.run(
-   agent=agent,
-   messages=[{"role":"user", "content": "Hi!"}],
-   context_variables={"user_name":"John"}
-)
-print(response.messages[-1]["content"])
+func Instructions(ctx goswarm.Context) string {
+   userName := ctx.GetArg("user_name", "")
+   return fmt.Sprintf("Help the user, %s, do whatever they want.", userName)
+}
+
+func main() {
+	agent := goswarm.NewAgent(
+	   option.WithAgentInstructions(Instructions),
+	)
+
+	contextVariables := types.Args{"user_name":"John"}
+
+	messages := goswarm.NewMessages(openai.UserMessage("Hi!"))
+	resp := client.Run(agent, messages, contextVariables)
+
+	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
 ```
 
 ```
@@ -219,22 +223,38 @@ Hi John, how can I assist you today?
 - If a function returns an `Agent`, execution will be transferred to that `Agent`.
 - If a function defines a `context_variables` parameter, it will be populated by the `context_variables` passed into `client.run()`.
 
-```python
-def greet(context_variables, language):
-   user_name = context_variables["user_name"]
-   greeting = "Hola" if language.lower() == "spanish" else "Hello"
-   print(f"{greeting}, {user_name}!")
+```go
+
+type GreetArgs struct {
+	Language string `json:"language" desc:"language kind. e.g, [english, spanish]" required:"true"`
+}
+
+func Greet(ctx goswarm.Context, args GreetArgs) string {
+   userName := ctx.GetArg("user_name", "")
+
+   greeting := ""
+   if args.Language == "spanish" {
+     greeting = "Hola"
+   } else {
+     greeting = "Hello"
+   }
+   fmt.Printf("%s, %s!", greeting, userName)
+
    return "Done"
+}
 
-agent = Agent(
-   functions=[greet]
-)
+func main() {
+	agent := goswarm.NewAgent("Agent"
+	   option.WithAgentFunctions(Greet),
+	)
 
-client.run(
-   agent=agent,
-   messages=[{"role": "user", "content": "Usa greet() por favor."}],
-   context_variables={"user_name": "John"}
-)
+	contextVariables := types.Args{"user_name":"John"}
+
+	messages := goswarm.NewMessages(openai.UserMessage("Use greet() please."))
+	resp := client.Run(agent, messages, contextVariables)
+
+	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
+}
 ```
 
 ```
@@ -248,16 +268,23 @@ Hola, John!
 
 An `Agent` can hand off to another `Agent` by returning it in a `function`.
 
-```python
-sales_agent = Agent(name="Sales Agent")
+```go
 
-def transfer_to_sales():
-   return sales_agent
+salesAgent := goswarm.NewAgent("Sales Agent")
 
-agent = Agent(functions=[transfer_to_sales])
+transferToSales := func(ctx goswarm.Context) *types.Agent {
+	return salesAgent
+}
 
-response = client.run(agent, [{"role":"user", "content":"Transfer me to sales."}])
-print(response.agent.name)
+agent := goswarm.NewAgent("Agent",
+   option.WithAgentFunctions(transferToSales),
+)
+
+messages := goswarm.NewMessages(openai.UserMessage("Transfer me to sales."))
+resp := client.Run(agent, messages, types.Args{})
+
+fmt.Println(resp.Agent.Name)
+
 ```
 
 ```
@@ -266,26 +293,29 @@ Sales Agent
 
 It can also update the `context_variables` by returning a more complete `Result` object. This can also contain a `value` and an `agent`, in case you want a single function to return a value, update the agent, and update the context variables (or any subset of the three).
 
-```python
-sales_agent = Agent(name="Sales Agent")
+```go
 
-def talk_to_sales():
-   print("Hello, World!")
-   return Result(
-       value="Done",
-       agent=sales_agent,
-       context_variables={"department": "sales"}
-   )
+salesAgent := goswarm.NewAgent("Sales Agent")
 
-agent = Agent(functions=[talk_to_sales])
+talkToSales := func(ctx goswarm.Context) *types.Agent {
+	fmt.Println("Hello, World!")
+	return &types.Result{
+		Value: "Done",
+		Agent: salesAgent,
+		ContextVariables: types.Args{"department": "sales"},
+	}
+}
 
-response = client.run(
-   agent=agent,
-   messages=[{"role": "user", "content": "Transfer me to sales"}],
-   context_variables={"user_name": "John"}
+agent := goswarm.NewAgent("Agent",
+   option.WithAgentFunctions(talkToSales),
 )
-print(response.agent.name)
-print(response.context_variables)
+
+messages := goswarm.NewMessages(openai.UserMessage("Transfer me to sales."))
+response := client.Run(agent, messages, types.Args{"user_name": "John"})
+
+fmt.Println(response.Agent.Name)
+fmt.Println(response.ContextVariables)
+
 ```
 
 ```
@@ -305,16 +335,34 @@ Swarm automatically converts functions into a JSON Schema that is passed into Ch
 - Type hints are mapped to the parameter's `type` (and default to `string`).
 - Per-parameter descriptions are not explicitly supported, but should work similarly if just added in the docstring. (In the future docstring argument parsing may be added.)
 
-```python
-def greet(name, age: int, location: str = "New York"):
-   """Greets the user. Make sure to get their name and age before calling.
+```go
+
+type GreetArgs struct {
+	Name     string `json:"name"     desc:"Name of the user"     required:"true"`
+	Age      int    `json:"age"      desc:"Age of the user"      required:"true"`
+	Location string `json:"location" desc:"Best place on earth."`
+}
+
+func Greet(ctx goswarm.Context, args GreetArgs) string {
+	if ctx.IsAnalyze() {
+		ctx.SetDescription(
+`Greets the user. Make sure to get their name and age before calling.
 
    Args:
       name: Name of the user.
       age: Age of the user.
-      location: Best place on earth.
-   """
-   print(f"Hello {name}, glad you are {age} in {location}!")
+      location: Best place on earth.`)
+		return ""
+	}
+
+	if args.Location == "" {
+		args.Location = "New York"
+	}
+
+   fmt.Printf("Hello %s, glad you are %d in %s!\n", args.Name, args.Age, args.Location)
+
+   return ""
+}
 ```
 
 ```javascript
@@ -326,9 +374,9 @@ def greet(name, age: int, location: str = "New York"):
       "parameters": {
          "type": "object",
          "properties": {
-            "name": {"type": "string"},
-            "age": {"type": "integer"},
-            "location": {"type": "string"}
+            "name": {"type": "string", "description": "Name of the user"},
+            "age": {"type": "integer", "description": "Age of the user"},
+            "location": {"type": "string", "description": "Best place on earth"}
          },
          "required": ["name", "age"]
       }
@@ -338,10 +386,11 @@ def greet(name, age: int, location: str = "New York"):
 
 ## Streaming
 
-```python
-stream = client.run(agent, messages, stream=True)
-for chunk in stream:
-   print(chunk)
+```go
+stream := client.RunAndStream(agent, messages, types.Args{}, option.WithStreamOption(true))
+for chunk := range stream {
+	print(chunk)
+}
 ```
 
 Uses the same events as [Chat Completions API streaming](https://platform.openai.com/docs/api-reference/streaming). See `process_and_print_streaming_response` in `/swarm/repl/repl.py` as an example.
@@ -359,10 +408,10 @@ Evaluations are crucial to any project, and we encourage developers to bring the
 
 Use the `run_demo_loop` to test out your swarm! This will run a REPL on your command line. Supports streaming.
 
-```python
-from swarm.repl import run_demo_loop
-...
-run_demo_loop(agent, stream=True)
+```go
+import "github.com/chiwooi/go-swarm/repl"
+
+repl.RunDemoLoop(agent, types.Args{}, option.WithStreamOption(true))
 ```
 
 # Core Contributors
