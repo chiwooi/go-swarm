@@ -393,12 +393,12 @@ for chunk := range stream {
 }
 ```
 
-Uses the same events as [Chat Completions API streaming](https://platform.openai.com/docs/api-reference/streaming). See `process_and_print_streaming_response` in `/swarm/repl/repl.py` as an example.
+Uses the same events as [Chat Completions API streaming](https://platform.openai.com/docs/api-reference/streaming). See `ProcessAndPrintStreamingResponse` in `/go-swarm/repl/repl.go` as an example.
 
 Two new event types have been added:
 
-- `{"delim":"start"}` and `{"delim":"end"}`, to signal each time an `Agent` handles a single message (response or function call). This helps identify switches between `Agent`s.
-- `{"response": Response}` will return a `Response` object at the end of a stream with the aggregated (complete) response, for convenience.
+- `"start"` and `"end"`, to signal each time an `Agent` handles a single message (response or function call). This helps identify switches between `Agent`s.
+- `Response` will return a `*types.Response` object at the end of a stream with the aggregated (complete) response, for convenience.
 
 # Evaluations
 
@@ -406,7 +406,7 @@ Evaluations are crucial to any project, and we encourage developers to bring the
 
 # Utils
 
-Use the `run_demo_loop` to test out your swarm! This will run a REPL on your command line. Supports streaming.
+Use the `RunDemoLoop` to test out your swarm! This will run a REPL on your command line. Supports streaming.
 
 ```go
 import "github.com/chiwooi/go-swarm/repl"
