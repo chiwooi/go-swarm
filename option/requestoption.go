@@ -1,4 +1,4 @@
-package goswarm
+package option
 
 type RunOption interface {
    ApplyOption(opts *RunOptions)
@@ -13,9 +13,11 @@ type RunOptions struct {
 }
 
 var DefRunOptions = RunOptions{
-   Model:    "",
-   MaxTurns: 9999,
-   Debug:    true,
+   Model:        "gpt-4o",
+   MaxTurns:     9999,
+   ExecuteTools: true,
+   Stream:       false,
+   Debug:        false,
 }
 
 type ModelOption string

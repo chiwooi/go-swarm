@@ -3,7 +3,6 @@ package goswarm_test
 import (
 	"fmt"
 	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 	"testing"
 
 	"github.com/chiwooi/go-swarm"

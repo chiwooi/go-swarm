@@ -1,13 +1,14 @@
 package goswarm
 
 import (
-	"context"
 	"encoding/json"
 //	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
 
+	"github.com/chiwooi/go-swarm/option"
+	"github.com/chiwooi/go-swarm/types"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/ssestream"
 )
@@ -31,17 +32,15 @@ func NewSwarm(client *openai.Client) *Swarm {
 // - stream
 //   true  : *ssestream.Stream[ChatCompletionChunk]
 //   false : *openai.ChatCompletion
-func (s *Swarm) GetChatCompletion(agent Agent, history []openai.ChatCompletionMessageParamUnion, contextVariables Args, modelOverride string, stream bool, debug bool) (any, error) {
+func (s *Swarm) GetChatCompletion(ctx Context, agent *types.Agent, history []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, modelOverride string, stream bool, debug bool) (any, error) {
 	var instructions string
-
-	ctx := context.Background()
 
 	switch v := agent.Instructions.(type) {
 	case string:
 		instructions = v
-	case func(Args) string:
+	case func(Context) string:
 		// if reflect.TypeOf(agent.Instructions).Kind() == reflect.Func
-		instructions = v(contextVariables)
+		instructions = v(ctx)
 	default:
 		return nil, fmt.Errorf("invalid instructions type: %T", v)
 	}
@@ -52,32 +51,12 @@ func (s *Swarm) GetChatCompletion(agent Agent, history []openai.ChatCompletionMe
 	messages = append(messages, history...)
 
 	if debug {
-		fmt.Println("Getting chat completion for:", messages)
+		fmt.Printf("Getting chat completion for: \n%+v\n", messages)
 	}
 
 	tools := make([]openai.ChatCompletionToolParam, len(agent.Functions))
 	for i, f := range agent.Functions {
-		tools[i], _ = functionToJSON(f) // Assuming FunctionToJSON is defined to convert functions to JSON
-	}
-
-	// Remove context variables from tools
-	for i := range tools {
-		params := tools[i].Function.Value.Parameters.Value
-		if params == nil {
-			continue
-		}
-		if propertys, ok := params["properties"].(map[string]interface{}); ok {
-			delete(propertys, __CTX_VARS_NAME__)
-		}
-
-		// 필수 항목중 context_variables 제거		
-		required := params["required"].([]string)
-		for j, req := range required {
-			if req == __CTX_VARS_NAME__ {
-				params["required"] = append(required[:j], required[j+1:]...) // Remove from required
-				break
-			}
-		}
+		tools[i], _ = functionToJSON(ctx, f) // Assuming FunctionToJSON is defined to convert functions to JSON
 	}
 
 	// Prepare the chat completion request
@@ -89,13 +68,12 @@ func (s *Swarm) GetChatCompletion(agent Agent, history []openai.ChatCompletionMe
 	createParams := openai.ChatCompletionNewParams{
 		Model:             openai.F(model),
 		Messages:          openai.F(messages),
-		Tools:             openai.F(tools),
-		ToolChoice:        openai.F(agent.ToolChoice),
-		// StreamOptions:     openai.F(streamOpt),
-		// ParallelToolCalls: openai.F(agent.ParallelToolCalls),
 	}
 
+	// set tools option if there are any functions
 	if len(tools) > 0 {
+		createParams.Tools = openai.F(tools)
+		createParams.ToolChoice = openai.F(agent.ToolChoice)
 		createParams.ParallelToolCalls = openai.F(agent.ParallelToolCalls)
 	}
 
@@ -105,19 +83,28 @@ func (s *Swarm) GetChatCompletion(agent Agent, history []openai.ChatCompletionMe
 		}
 		createParams.StreamOptions = openai.F(streamOpt)
 
-		return s.client.Chat.Completions.NewStreaming(ctx, createParams), nil
+		if debug {
+			fmt.Printf("Getting chat completion tools for:\n%+v\n", tools)
+		}
+
+		return s.client.Chat.Completions.NewStreaming(ctx.GetContext(), createParams), nil
 	}
 
-	return s.client.Chat.Completions.New(ctx, createParams)
+	return s.client.Chat.Completions.New(ctx.GetContext(), createParams)
 }
 
 // HandleFunctionResult processes the result of a function call.
-func (s *Swarm) HandleFunctionResult(result interface{}, debug bool) Result {
+func (s *Swarm) HandleFunctionResult(result interface{}, debug bool) types.Result {
 	switch res := result.(type) {
-	case Result:
+	case types.Result:
 		return res
-	case Agent:
-		return Result{
+	case *types.Agent:
+		return types.Result{
+			Value: fmt.Sprintf(`{"assistant": "%s"}`, res.Name),
+			Agent: res,
+		}
+	case types.Agent:
+		return types.Result{
 			Value: fmt.Sprintf(`{"assistant": "%s"}`, res.Name),
 			Agent: &res,
 		}
@@ -128,24 +115,28 @@ func (s *Swarm) HandleFunctionResult(result interface{}, debug bool) Result {
 			if debug {
 				fmt.Println(errorMessage)
 			}
-			return Result{Value: errorMessage} // Returning the error as a string
+			return types.Result{Value: errorMessage} // Returning the error as a string
 		}
-		return Result{Value: string(value)}
+		return types.Result{Value: string(value)}
 	}
 }
 
 // HandleToolCalls processes tool calls from the chat completion.
-func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall, functions []AgentFunction, contextVariables Args, debug bool) Response {
-	functionMap := make(map[string]AgentFunction)
+func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall, functions []types.AgentFunction, contextVariables types.Args, debug bool) types.Response {
+	ctx := RunContext(contextVariables)
+
+
+	functionMap := make(map[string]types.AgentFunction)
 	for _, f := range functions {
 		fnVal := reflect.ValueOf(f)
-		name := runtime.FuncForPC(fnVal.Pointer()).Name()
-		functionMap[name] = f
+		fnName := runtime.FuncForPC(fnVal.Pointer()).Name()
+		fnName = funcNameNormalization(fnName)
+		functionMap[fnName] = f
 	}
 
-	partialResponse := Response{
+	partialResponse := types.Response{
 		Messages:         []openai.ChatCompletionMessageParamUnion{},
-		ContextVariables: make(Args),
+		ContextVariables: make(types.Args),
 	}
 
 	for _, toolCall := range toolCalls {
@@ -161,7 +152,7 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 			continue
 		}
 
-		var args Args
+		var args types.Args
 		if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 			if debug {
 				fmt.Printf("Failed to unmarshal arguments for tool call %s: %v\n", name, err)
@@ -169,12 +160,9 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 			continue
 		}
 
-		// 호출함수 정의에 __CTX_VARS_NAME__ 인자가 있는지 확인
-		if hasArgInFunc(functionMap[name], __CTX_VARS_NAME__) {
-			args[__CTX_VARS_NAME__] = contextVariables
-		}
+		fmt.Printf("Calling function %s with args: %+v\n", name, args)
 
-		rawResult := callFuncByArgs(functionMap[name], args)
+		rawResult := callFuncByArgs(ctx, functionMap[name], args)
 
 		result := s.HandleFunctionResult(rawResult, debug)
 		partialResponse.Messages = append(partialResponse.Messages, openai.ToolMessage(toolCall.ID, result.Value))
@@ -191,22 +179,24 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 }
 
 // RunAndStream executes the agent and streams responses.
-func (s *Swarm) RunAndStream(agent Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables Args, opts ...RunOption) <-chan Response {
-	args := DefRunOptions
+func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, opts ...option.RunOption) <-chan any {
+	args := option.DefRunOptions
 	for _, opt := range opts {
 		opt.ApplyOption(&args)
 	}
 
-	responseChan := make(chan Response)
+	responseChan := make(chan any)
 	go func() {
 		defer close(responseChan)
+
+		ctx := AnalyzeContext(contextVariables)
 
 		activeAgent := agent
 		history := messages
 		initLen := len(messages)
 
 		for len(history)-initLen < args.MaxTurns {
-			completionRaw, err := s.GetChatCompletion(activeAgent, history, contextVariables, args.Model, true, args.Debug)
+			completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, contextVariables, args.Model, true, args.Debug)
 			if err != nil {
 				if args.Debug {
 					fmt.Println("Error getting chat completion:", err)
@@ -224,11 +214,14 @@ func (s *Swarm) RunAndStream(agent Agent, messages []openai.ChatCompletionMessag
 
 			acc := openai.ChatCompletionAccumulator{}
 
+			responseChan <- "start"
 			// Handle streaming chunks here
 			for stream.Next() {
 				chunk := stream.Current()
+				responseChan <- chunk
 				acc.AddChunk(chunk)
 			}
+			responseChan <- "end"
 
 			if err := stream.Err(); err != nil {
 				if args.Debug {
@@ -236,8 +229,10 @@ func (s *Swarm) RunAndStream(agent Agent, messages []openai.ChatCompletionMessag
 				}
 				return
 			}
-
 			message := acc.Choices[0].Message
+			debugPrint(args.Debug, "Received completion: %+v", message)
+			history = append(history, message)
+
 			if len(message.ToolCalls) == 0 {
 				if args.Debug {
 					fmt.Println("Ending turn.")
@@ -256,14 +251,14 @@ func (s *Swarm) RunAndStream(agent Agent, messages []openai.ChatCompletionMessag
 					contextVariables[k] = v
 				}
 				if partialResponse.Agent != nil {
-					activeAgent = *partialResponse.Agent
+					activeAgent = partialResponse.Agent
 				}
 			}
 		}
 
-		responseChan <- Response{
+		responseChan <- &types.Response{
 			Messages:         history[initLen:],
-			Agent:            &activeAgent,
+			Agent:            activeAgent,
 			ContextVariables: contextVariables,
 		}
 	}()
@@ -272,9 +267,8 @@ func (s *Swarm) RunAndStream(agent Agent, messages []openai.ChatCompletionMessag
 }
 
 // Run executes the agent and returns the response.
-func (s *Swarm) Run(agent Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables Args, opts ...RunOption) Response {
-	args := DefRunOptions
-
+func (s *Swarm) Run(agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, opts ...option.RunOption) *types.Response {
+	args := option.DefRunOptions
 	for _, opt := range opts {
 		opt.ApplyOption(&args)
 	}
@@ -283,15 +277,23 @@ func (s *Swarm) Run(agent Agent, messages []openai.ChatCompletionMessageParamUni
 
 	if args.Stream {
 		responseChan := s.RunAndStream(agent, messages, contextVariables, opts...)
-		return <-responseChan
+		for response := range responseChan {
+			switch v := response.(type) {
+			case *types.Response:
+				return v
+			}
+		}
+		return NewResponse(messages, agent, contextVariables)
 	}
 
 	activeAgent := agent
 	history := messages
 	initLen := len(messages)
 
+	ctx := AnalyzeContext(contextVariables)
+
 	for len(history)-initLen < args.MaxTurns {
-		completionRaw, err := s.GetChatCompletion(activeAgent, history, contextVariables, args.Model, false, args.Debug)
+		completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, contextVariables, args.Model, false, args.Debug)
 		if err != nil {
 			if args.Debug {
 				fmt.Println("Error getting chat completion:", err)
@@ -302,7 +304,7 @@ func (s *Swarm) Run(agent Agent, messages []openai.ChatCompletionMessageParamUni
 
 		message := completion.Choices[0].Message
 		if args.Debug {
-			fmt.Println("Received completion:", message)
+			fmt.Printf("Received completion: %+v\n", message)
 		}
 		// message.Sender = activeAgent.Name
 		history = append(history, message)
@@ -320,13 +322,13 @@ func (s *Swarm) Run(agent Agent, messages []openai.ChatCompletionMessageParamUni
 			contextVariables[k] = v
 		}
 		if partialResponse.Agent != nil {
-			activeAgent = *partialResponse.Agent
+			activeAgent = partialResponse.Agent
 		}
 	}
 
-	return Response{
+	return &types.Response{
 		Messages:         history[initLen:],
-		Agent:            &activeAgent,
+		Agent:            activeAgent,
 		ContextVariables: contextVariables,
 	}
 }
