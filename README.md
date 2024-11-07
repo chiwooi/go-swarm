@@ -36,6 +36,7 @@ import (
 func main() {
     oai := openai.NewClient()
     client := goswarm.NewSwarm(oai)
+    ctx := goswarm.NewContext(context.Background())
 
     agentA := goswarm.NewAgent("Agent A", option.WithAgentInstructions("You are a helpful agent."))
     agentB := goswarm.NewAgent("Agent B", option.WithAgentInstructions("Only speak in Haikus."))
@@ -51,7 +52,7 @@ func main() {
     agentA.Functions = append(agentA.Functions, transferToAgentB)
 
     messages := goswarm.NewMessages(openai.UserMessage("I want to talk to agent B."))
-    resp := client.Run(agentA, messages, types.Args{})
+    resp := client.Run(ctx, agentA, messages)
 
     if len(resp.Messages) > 0 {
         fmt.Println(resp.Messages[0].(openai.ChatCompletionMessage).Content)
@@ -126,6 +127,7 @@ import (
 
 oai := openai.NewClient()
 client := goswarm.NewSwarm(oai)
+ctx := goswarm.NewContext(context.Background())
 
 ```
 
@@ -190,24 +192,26 @@ agent := goswarm.NewAgent(
 )
 ```
 
-The `instructions` can either be a regular `str`, or a function that returns a `str`. The function can optionally receive a `context_variables` parameter, which will be populated by the `context_variables` passed into `client.run()`.
+The `instructions` can either be a regular `str`, or a function that returns a `str`. The function can optionally receive through a `ctx` parameter, which will be populated by the `ctx` passed into `client.run()`.
 
 ```go
 
 func Instructions(ctx goswarm.Context) string {
-   userName := ctx.GetArg("user_name", "")
+   userName := ctx.GetVariable("user_name", "")
    return fmt.Sprintf("Help the user, %s, do whatever they want.", userName)
 }
 
 func main() {
+    ctx := goswarm.NewContext(context.Background())
+
 	agent := goswarm.NewAgent(
 	   option.WithAgentInstructions(Instructions),
 	)
 
-	contextVariables := types.Args{"user_name":"John"}
+    ctx.SetVariables(types.ContextVariables{"user_name":"John"})
 
 	messages := goswarm.NewMessages(openai.UserMessage("Hi!"))
-	resp := client.Run(agent, messages, contextVariables)
+	resp := client.Run(ctx, agent, messages)
 
 	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
 ```
@@ -218,11 +222,11 @@ Hi John, how can I assist you today?
 
 ## Functions
 
-- Swarm `Agent`s can call python functions directly.
+- Swarm `Agent`s can call golang functions directly.
 - Function should usually return a `str` (values will be attempted to be cast as a `str`).
 - If a function returns an `Agent`, execution will be transferred to that `Agent`.
-- If a function defines a `context_variables` parameter, it will be populated by the `context_variables` passed into `client.run()`.
-
+- If a function defines a `ctx` parameter, it will be populated by the `ctx` passed into `client.run()`.
+- If a function defines a function call parameter in the form of a struct, the argument values for the function call are populated into each member variable of args.
 ```go
 
 type GreetArgs struct {
@@ -244,14 +248,17 @@ func Greet(ctx goswarm.Context, args GreetArgs) string {
 }
 
 func main() {
-	agent := goswarm.NewAgent("Agent"
+    ctx := goswarm.NewContext(context.Background())
+
+	agent := goswarm.NewAgent(
+       option.WithAgentName("Agent"),
 	   option.WithAgentFunctions(Greet),
 	)
 
-	contextVariables := types.Args{"user_name":"John"}
+    ctx.SetVariables(types.ContextVariables{"user_name":"John"})
 
 	messages := goswarm.NewMessages(openai.UserMessage("Use greet() please."))
-	resp := client.Run(agent, messages, contextVariables)
+	resp := client.Run(ctx, agent, messages)
 
 	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
 }
@@ -269,22 +276,23 @@ Hola, John!
 An `Agent` can hand off to another `Agent` by returning it in a `function`.
 
 ```go
+ctx := goswarm.NewContext(context.Background())
 
-salesAgent := goswarm.NewAgent("Sales Agent")
+salesAgent := goswarm.NewAgent(option.WithAgentName("Sales Agent"))
 
 transferToSales := func(ctx goswarm.Context) *types.Agent {
 	return salesAgent
 }
 
-agent := goswarm.NewAgent("Agent",
+agent := goswarm.NewAgent(
+   option.WithAgentName("Agent")
    option.WithAgentFunctions(transferToSales),
 )
 
 messages := goswarm.NewMessages(openai.UserMessage("Transfer me to sales."))
-resp := client.Run(agent, messages, types.Args{})
+resp := client.Run(ctx, agent, messages)
 
 fmt.Println(resp.Agent.Name)
-
 ```
 
 ```
@@ -294,28 +302,33 @@ Sales Agent
 It can also update the `context_variables` by returning a more complete `Result` object. This can also contain a `value` and an `agent`, in case you want a single function to return a value, update the agent, and update the context variables (or any subset of the three).
 
 ```go
+ctx := goswarm.NewContext(context.Background())
 
 salesAgent := goswarm.NewAgent("Sales Agent")
 
-talkToSales := func(ctx goswarm.Context) *types.Agent {
+talkToSales := func(ctx goswarm.Context) *types.Result {
 	fmt.Println("Hello, World!")
+
+    ctx.SetVariable("department", "sales")
+
 	return &types.Result{
 		Value: "Done",
 		Agent: salesAgent,
-		ContextVariables: types.Args{"department": "sales"},
 	}
 }
 
-agent := goswarm.NewAgent("Agent",
+agent := goswarm.NewAgent(
+   option.WithAgentName("Agent"),
    option.WithAgentFunctions(talkToSales),
 )
 
+ctx.SetVariables(types.ContextVariables{"user_name":"John"})
+
 messages := goswarm.NewMessages(openai.UserMessage("Transfer me to sales."))
-response := client.Run(agent, messages, types.Args{"user_name": "John"})
+response := client.Run(ctx, agent, messages)
 
 fmt.Println(response.Agent.Name)
-fmt.Println(response.ContextVariables)
-
+fmt.Println(ctx.GetVariables())
 ```
 
 ```
@@ -330,10 +343,9 @@ Sales Agent
 
 Swarm automatically converts functions into a JSON Schema that is passed into Chat Completions `tools`.
 
-- Docstrings are turned into the function `description`.
-- Parameters without default values are set to `required`.
-- Type hints are mapped to the parameter's `type` (and default to `string`).
-- Per-parameter descriptions are not explicitly supported, but should work similarly if just added in the docstring. (In the future docstring argument parsing may be added.)
+- During the function analysis phase before the call, ctx.IsAnalyze() is set to true and called. At this point, the value specified in ctx.SetDescription() is the function `description`.
+- The function parameters consist of two parts: the Context and the args parameter, which is a single struct that receives the function call arguments.
+- The struct parameter used for receiving call arguments utilizes Golang's struct `tag` to define the argument description `desc` and whether the parameter is `required`.
 
 ```go
 
@@ -387,7 +399,7 @@ func Greet(ctx goswarm.Context, args GreetArgs) string {
 ## Streaming
 
 ```go
-stream := client.RunAndStream(agent, messages, types.Args{}, option.WithStreamOption(true))
+stream := client.RunAndStream(ctx, agent, messages, types.Args{}, option.WithStream(true))
 for chunk := range stream {
 	print(chunk)
 }
@@ -411,7 +423,7 @@ Use the `RunDemoLoop` to test out your swarm! This will run a REPL on your comma
 ```go
 import "github.com/chiwooi/go-swarm/repl"
 
-repl.RunDemoLoop(agent, types.Args{}, option.WithStreamOption(true))
+repl.RunDemoLoop(ctx, agent, option.WithStream(true))
 ```
 
 # Core Contributors

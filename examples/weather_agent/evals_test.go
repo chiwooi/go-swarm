@@ -1,6 +1,7 @@
 package main
 
 import (
+    "context"
     "testing"
     "github.com/stretchr/testify/assert"
 
@@ -12,8 +13,10 @@ import (
 )
 
 func RunAndGetToolCalls(agent *types.Agent, query string) []openai.ChatCompletionMessageToolCall {
+    ctx := goswarm.NewContext(context.Background())
+
     messages := goswarm.NewMessages(openai.UserMessage(query))
-    response := client.Run(agent, messages, types.Args{}, option.WithExecuteToolsOption(false))
+    response := client.Run(ctx, agent, messages, option.WithExecuteTools(false))
 
     return response.Messages[len(response.Messages)-1].(openai.ChatCompletionMessage).ToolCalls
 }

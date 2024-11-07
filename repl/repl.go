@@ -29,10 +29,6 @@ func ProcessAndPrintStreamingResponse(response <-chan any) *types.Response {
             return v
         case openai.ChatCompletionChunk:
             acc.AddChunk(v)
-            // if content, ok := acc.JustFinishedContent(); ok {
-            //     fmt.Printf("\033[94m%s:\033[0m ", lastSender)
-            //     fmt.Print(content)
-            // }
             if len(v.Choices) == 0 {
                 break
             }
@@ -55,6 +51,17 @@ func ProcessAndPrintStreamingResponse(response <-chan any) *types.Response {
                     }
                     fmt.Printf("\033[94m%s: \033[95m%s\033[0m()\n", lastSender, name)
                 }
+            }
+
+            if content, ok := acc.JustFinishedContent(); ok {
+                fmt.Printf("\033[94m%s:\033[0m ", lastSender)
+                fmt.Print(content)
+            }
+            if tool, ok := acc.JustFinishedToolCall(); ok {
+                fmt.Println("Tool call stream finished:", tool.Index, tool.Name, tool.Arguments)
+            }
+            if refusal, ok := acc.JustFinishedRefusal(); ok {
+                fmt.Println("Refusal stream finished:", refusal)
             }
         case string:
             switch v {
@@ -99,7 +106,7 @@ func PrettyPrintMessages(messages []openai.ChatCompletionMessageParamUnion) {
 }
 
 
-func RunDemoLoop(startAgent *types.Agent, contextVariables types.Args, opts ...option.RunOption) {
+func RunDemoLoop(ctx goswarm.Context, startAgent *types.Agent, opts ...option.RunOption) {
     args := option.DefRunOptions
     for _, opt := range opts {
         opt.ApplyOption(&args)
@@ -125,10 +132,10 @@ func RunDemoLoop(startAgent *types.Agent, contextVariables types.Args, opts ...o
 
 
         if args.Stream {
-            responseChan := client.RunAndStream(agent, messages, contextVariables, opts...)
+            responseChan := client.RunAndStream(ctx, agent, messages, opts...)
             response = ProcessAndPrintStreamingResponse(responseChan)
         } else {
-            response = client.Run(agent, messages, contextVariables, opts...)
+            response = client.Run(ctx, agent, messages, opts...)
             PrettyPrintMessages(response.Messages)
         }
 

@@ -32,8 +32,11 @@ func NewSwarm(client *openai.Client) *Swarm {
 // - stream
 //   true  : *ssestream.Stream[ChatCompletionChunk]
 //   false : *openai.ChatCompletion
-func (s *Swarm) GetChatCompletion(ctx Context, agent *types.Agent, history []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, modelOverride string, stream bool, debug bool) (any, error) {
+func (s *Swarm) GetChatCompletion(ctx Context, agent *types.Agent, history []openai.ChatCompletionMessageParamUnion, modelOverride string, stream bool, debug bool) (any, error) {
 	var instructions string
+
+	ctx = NewContext(ctx)
+	ctx.SetAnalyze(true)
 
 	switch v := agent.Instructions.(type) {
 	case string:
@@ -122,9 +125,9 @@ func (s *Swarm) HandleFunctionResult(result interface{}, debug bool) types.Resul
 }
 
 // HandleToolCalls processes tool calls from the chat completion.
-func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall, functions []types.AgentFunction, contextVariables types.Args, debug bool) types.Response {
-	ctx := RunContext(contextVariables)
-
+func (s *Swarm) HandleToolCalls(ctx Context, toolCalls []openai.ChatCompletionMessageToolCall, functions []types.AgentFunction, debug bool) types.Response {
+	ctx = NewContext(ctx)
+	ctx.SetAnalyze(false)
 
 	functionMap := make(map[string]types.AgentFunction)
 	for _, f := range functions {
@@ -136,7 +139,6 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 
 	partialResponse := types.Response{
 		Messages:         []openai.ChatCompletionMessageParamUnion{},
-		ContextVariables: make(types.Args),
 	}
 
 	for _, toolCall := range toolCalls {
@@ -152,7 +154,8 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 			continue
 		}
 
-		var args types.Args
+		// tool call 요청에 대한 함수 파라메터 값수집
+		var args types.ContextVariables
 		if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 			if debug {
 				fmt.Printf("Failed to unmarshal arguments for tool call %s: %v\n", name, err)
@@ -167,9 +170,6 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 		result := s.HandleFunctionResult(rawResult, debug)
 		partialResponse.Messages = append(partialResponse.Messages, openai.ToolMessage(toolCall.ID, result.Value))
 
-		for k, v := range result.ContextVariables {
-			partialResponse.ContextVariables[k] = v
-		}
 		if result.Agent != nil {
 			partialResponse.Agent = result.Agent
 		}
@@ -179,7 +179,7 @@ func (s *Swarm) HandleToolCalls(toolCalls []openai.ChatCompletionMessageToolCall
 }
 
 // RunAndStream executes the agent and streams responses.
-func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, opts ...option.RunOption) <-chan any {
+func (s *Swarm) RunAndStream(ctx Context, agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, opts ...option.RunOption) <-chan any {
 	args := option.DefRunOptions
 	for _, opt := range opts {
 		opt.ApplyOption(&args)
@@ -189,14 +189,15 @@ func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletio
 	go func() {
 		defer close(responseChan)
 
-		ctx := AnalyzeContext(contextVariables)
+		ctx = NewContext(ctx)
+		ctx.SetAnalyze(true)
 
 		activeAgent := agent
 		history := messages
 		initLen := len(messages)
 
 		for len(history)-initLen < args.MaxTurns {
-			completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, contextVariables, args.Model, true, args.Debug)
+			completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, args.Model, true, args.Debug)
 			if err != nil {
 				if args.Debug {
 					fmt.Println("Error getting chat completion:", err)
@@ -245,11 +246,8 @@ func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletio
 				for _, toolCall := range message.ToolCalls {
 					toolCalls = append(toolCalls, toolCall)
 				}
-				partialResponse := s.HandleToolCalls(toolCalls, activeAgent.Functions, contextVariables, args.Debug)
+				partialResponse := s.HandleToolCalls(ctx, toolCalls, activeAgent.Functions, args.Debug)
 				history = append(history, partialResponse.Messages...)
-				for k, v := range partialResponse.ContextVariables {
-					contextVariables[k] = v
-				}
 				if partialResponse.Agent != nil {
 					activeAgent = partialResponse.Agent
 				}
@@ -259,7 +257,6 @@ func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletio
 		responseChan <- &types.Response{
 			Messages:         history[initLen:],
 			Agent:            activeAgent,
-			ContextVariables: contextVariables,
 		}
 	}()
 
@@ -267,7 +264,7 @@ func (s *Swarm) RunAndStream(agent *types.Agent, messages []openai.ChatCompletio
 }
 
 // Run executes the agent and returns the response.
-func (s *Swarm) Run(agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, contextVariables types.Args, opts ...option.RunOption) *types.Response {
+func (s *Swarm) Run(ctx Context, agent *types.Agent, messages []openai.ChatCompletionMessageParamUnion, opts ...option.RunOption) *types.Response {
 	args := option.DefRunOptions
 	for _, opt := range opts {
 		opt.ApplyOption(&args)
@@ -276,24 +273,22 @@ func (s *Swarm) Run(agent *types.Agent, messages []openai.ChatCompletionMessageP
 	// modelOverride string, stream bool, debug bool, maxTurns int, executeTools bool
 
 	if args.Stream {
-		responseChan := s.RunAndStream(agent, messages, contextVariables, opts...)
+		responseChan := s.RunAndStream(ctx, agent, messages, opts...)
 		for response := range responseChan {
 			switch v := response.(type) {
 			case *types.Response:
 				return v
 			}
 		}
-		return NewResponse(messages, agent, contextVariables)
+		return NewResponse(messages, agent)
 	}
 
 	activeAgent := agent
 	history := messages
 	initLen := len(messages)
 
-	ctx := AnalyzeContext(contextVariables)
-
 	for len(history)-initLen < args.MaxTurns {
-		completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, contextVariables, args.Model, false, args.Debug)
+		completionRaw, err := s.GetChatCompletion(ctx, activeAgent, history, args.Model, false, args.Debug)
 		if err != nil {
 			if args.Debug {
 				fmt.Println("Error getting chat completion:", err)
@@ -316,11 +311,8 @@ func (s *Swarm) Run(agent *types.Agent, messages []openai.ChatCompletionMessageP
 			break
 		}
 
-		partialResponse := s.HandleToolCalls(message.ToolCalls, activeAgent.Functions, contextVariables, args.Debug)
+		partialResponse := s.HandleToolCalls(ctx, message.ToolCalls, activeAgent.Functions, args.Debug)
 		history = append(history, partialResponse.Messages...)
-		for k, v := range partialResponse.ContextVariables {
-			contextVariables[k] = v
-		}
 		if partialResponse.Agent != nil {
 			activeAgent = partialResponse.Agent
 		}
@@ -329,6 +321,5 @@ func (s *Swarm) Run(agent *types.Agent, messages []openai.ChatCompletionMessageP
 	return &types.Response{
 		Messages:         history[initLen:],
 		Agent:            activeAgent,
-		ContextVariables: contextVariables,
 	}
 }

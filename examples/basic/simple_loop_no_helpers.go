@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+    "context"
 	"fmt"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/chiwooi/go-swarm"
 	"github.com/chiwooi/go-swarm/option"
-	"github.com/chiwooi/go-swarm/types"
 )
 
 func PrettyPrintMessage(messages []openai.ChatCompletionMessageParamUnion) {
@@ -25,11 +25,14 @@ func main() {
     oai := openai.NewClient()
     client := goswarm.NewSwarm(oai)
 
-    agent := goswarm.NewAgent("Agent",
+    agent := goswarm.NewAgent(
         option.WithAgentInstructions("You are a helpful agent."),
     )
 
+    ctx := goswarm.NewContext(context.Background())
+
     messages := goswarm.NewMessages(nil)
+
     reader := bufio.NewReader(os.Stdin)
 
     for {
@@ -38,7 +41,7 @@ func main() {
         userInput = strings.ReplaceAll(userInput, "\n", "")
         messages = append(messages, openai.UserMessage(userInput))
 
-        response := client.Run(agent, messages, types.Args{}, option.WithDebugOption(false))
+        response := client.Run(ctx, agent, messages, option.WithDebug(false))
         messages = response.Messages
         agent = response.Agent
         PrettyPrintMessage(messages)

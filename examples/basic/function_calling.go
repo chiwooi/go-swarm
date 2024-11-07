@@ -2,12 +2,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/openai/openai-go"
 
 	"github.com/chiwooi/go-swarm"
 	"github.com/chiwooi/go-swarm/option"
-	"github.com/chiwooi/go-swarm/types"
 )
 
 type GetWeatherArgs struct {
@@ -27,13 +27,15 @@ func main() {
 	oai := openai.NewClient()
 	client := goswarm.NewSwarm(oai)
 
-	agent := goswarm.NewAgent("Agent",
+	agent := goswarm.NewAgent(
 		option.WithAgentInstructions("You are a helpful agent."),
 		option.WithAgentFunctions(GetWeather),
 	)
 
+    ctx := goswarm.NewContext(context.Background())
+
 	messages := goswarm.NewMessages(openai.UserMessage("What's the weather in NYC?"))
-	resp := client.Run(agent, messages, types.Args{})
+	resp := client.Run(ctx, agent, messages)
 
 	if len(resp.Messages) > 0 {
 		fmt.Println(resp.Messages[0].(openai.ChatCompletionMessage).Content)

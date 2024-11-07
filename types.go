@@ -8,14 +8,14 @@ import (
 )
 
 // NewAgent creates a new Agent instance with the specified name, model, and instructions.
-func NewAgent(name string, opts ...option.AgentOption) *types.Agent {
+func NewAgent(opts ...option.AgentOption) *types.Agent {
 	options := option.DefAgentOptions
 	for _, o := range opts {
 		o.ApplyOption(&options)
 	}
 
 	return &types.Agent{
-		Name:              name,
+		Name:              options.Name,
 		Model:             options.Model,
 		Instructions:      options.Instructions,
 		Functions:         options.Functions,
@@ -25,20 +25,18 @@ func NewAgent(name string, opts ...option.AgentOption) *types.Agent {
 }
 
 // NewResponse creates a new Response instance.
-func NewResponse(messages []openai.ChatCompletionMessageParamUnion, agent *types.Agent, contextVariables map[string]interface{}) *types.Response {
+func NewResponse(messages []openai.ChatCompletionMessageParamUnion, agent *types.Agent) *types.Response {
 	return &types.Response{
 		Messages:         messages,
 		Agent:            agent,
-		ContextVariables: contextVariables,
 	}
 }
 
 // NewResult creates a new Result instance.
-func NewResult(value string, agent *types.Agent, contextVariables map[string]interface{}) *types.Result {
+func NewResult(value string, agent *types.Agent) *types.Result {
 	return &types.Result{
 		Value:           value,
 		Agent:           agent,
-		ContextVariables: contextVariables,
 	}
 }
 

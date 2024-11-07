@@ -1,11 +1,15 @@
 package main
 
 import(
+    "context"
+
+    "github.com/chiwooi/go-swarm"
     "github.com/chiwooi/go-swarm/repl"
     "github.com/chiwooi/go-swarm/option"
-    "github.com/chiwooi/go-swarm/types"
 )
 
 func main() {
-    repl.RunDemoLoop(weatherAgent, types.Args{}, option.WithStreamOption(true), option.WithDebugOption(false))
+    ctx := goswarm.NewContext(context.Background())
+
+    repl.RunDemoLoop(ctx, weatherAgent, option.WithStream(true), option.WithDebug(false))
 }

@@ -107,7 +107,7 @@ func hasArgInFunc(f any, name string) bool {
 }
 
 // Call the function with the specified arguments.
-func callFuncByArgs(ctx Context, f any, args types.Args) any {
+func callFuncByArgs(ctx Context, f any, args types.ContextVariables) any {
 	v := reflect.ValueOf(f)
 	if v.Kind() != reflect.Func {
 		return ""
@@ -211,7 +211,7 @@ func getCallFuncDesc(ctx Context, f any) Context {
 
 // go 함수 "." 문자를 "_"문자로 변환
 func funcNameNormalization(name string) string {
-	name = strings.TrimPrefix(name, "command-line-arguments.")
+	name = strings.TrimPrefix(name, "command-line-arguments.") // remove for global variable prefix
 	name = strings.ReplaceAll(name, ".", "_")
 	return name
 }

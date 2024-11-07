@@ -52,7 +52,8 @@ func SendEmail(ctx goswarm.Context, args SendEmailArgs) string {
 var oai = openai.NewClient()
 var client = goswarm.NewSwarm(oai)
 
-var weatherAgent = goswarm.NewAgent("Weather Agent",
+var weatherAgent = goswarm.NewAgent(
+    option.WithAgentName("Weather Agent"),
     option.WithAgentInstructions("You are a helpful agent."),
     option.WithAgentToolChoice(option.ToolChoiceOptionAuto),
     option.WithAgentFunctions(GetWeather, SendEmail),

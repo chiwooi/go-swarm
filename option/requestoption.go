@@ -37,7 +37,7 @@ func (o StreamOption) ApplyOption(opts *RunOptions) {
    opts.Stream = bool(o)
 }
 
-func WithStreamOption(flag bool) StreamOption {
+func WithStream(flag bool) StreamOption {
    return StreamOption(flag)
 }
 
@@ -48,7 +48,7 @@ func (o DebugOption) ApplyOption(opts *RunOptions) {
    opts.Debug = bool(o)
 }
 
-func WithDebugOption(flag bool) DebugOption {
+func WithDebug(flag bool) DebugOption {
    return DebugOption(flag)
 }
 
@@ -59,7 +59,7 @@ func (o MaxTurnsOption) ApplyOption(opts *RunOptions) {
    opts.MaxTurns = int(o)
 }
 
-func WithMaxTurnsOption(maxTurns int) MaxTurnsOption {
+func WithMaxTurns(maxTurns int) MaxTurnsOption {
    return MaxTurnsOption(maxTurns)
 }
 
@@ -70,6 +70,6 @@ func (o ExecuteToolsOption) ApplyOption(opts *RunOptions) {
    opts.ExecuteTools = bool(o)
 }
 
-func WithExecuteToolsOption(exec bool) ExecuteToolsOption {
+func WithExecuteTools(exec bool) ExecuteToolsOption {
    return ExecuteToolsOption(exec)
 }

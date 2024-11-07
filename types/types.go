@@ -4,13 +4,17 @@ import (
 	"github.com/openai/openai-go"
 )
 
-type Args map[string]any
+type ContextVariables map[string]any
 
-func (a Args) Get(key string, defaultValue any) any {
+func (a ContextVariables) Get(key string, defaultValue any) any {
 	if value, ok := a[key]; ok {
 		return value
 	}
 	return defaultValue
+}
+
+func (a ContextVariables) Set(key string, val any) {
+	a[key] = val
 }
 
 // AgentFunction is a type alias for functions that return either a string, an Agent, or a map.
@@ -33,12 +37,12 @@ type Agent struct {
 type Response struct {
 	Messages        []openai.ChatCompletionMessageParamUnion
 	Agent           *Agent
-	ContextVariables Args
+	// ContextVariables ContextVariables
 }
 
 // Result encapsulates the return values for an agent function.
 type Result struct {
 	Value           string
 	Agent           *Agent
-	ContextVariables Args
+	// ContextVariables ContextVariables
 }

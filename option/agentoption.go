@@ -12,6 +12,7 @@ type AgentOption interface {
 }
 
 type AgentOptions struct {
+	Name              string
 	Model             string
 	Instructions      any
 	Functions         []types.AgentFunction
@@ -20,10 +21,23 @@ type AgentOptions struct {
 }
 
 var DefAgentOptions = AgentOptions{
+	Name:              "Agent",
    Model:             "gpt-4o",
    Instructions:      "You are a helpful agent.",
    ToolChoice:        openai.ChatCompletionToolChoiceOptionBehaviorAuto,
    ParallelToolCalls: true,
+}
+
+// set the model for the agent.
+
+type AgentNameOption string
+
+func (o AgentNameOption) ApplyOption(opts *AgentOptions) {
+   opts.Model = string(o)
+}
+
+func WithAgentName(name string) AgentNameOption {
+   return AgentNameOption(name)
 }
 
 // set the model for the agent.
