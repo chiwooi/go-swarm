@@ -147,14 +147,14 @@ At its core, Swarm's `client.run()` implements the following loop:
 
 | Argument              | Type    | Description                                                                                                                                            | Default        |
 | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| **ctx**               | `Context`  | A dictionary of additional context variables, available to functions and Agent instructions                                                            | `{}`           |
 | **agent**             | `Agent` | The (initial) agent to be called.                                                                                                                      | (required)     |
 | **messages**          | `List`  | A list of message objects, identical to [Chat Completions `messages`](https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages) | (required)     |
-| **contextVariables** | `dict`  | A dictionary of additional context variables, available to functions and Agent instructions                                                            | `{}`           |
-| **option.WithMaxTurnsOption()**         | `int`   | The maximum number of conversational turns allowed                                                                                                     | `float("inf")` |
-| **option.WithModel()**    | `str`   | An optional string to override the model being used by an Agent                                                                                        | `None`         |
-| **option.WithExecuteToolsOption()**     | `bool`  | If `False`, interrupt execution and immediately returns `tool_calls` message when an Agent tries to call a function                                    | `True`         |
-| **option.WithStreamOption()**            | `bool`  | If `True`, enables streaming responses                                                                                                                 | `False`        |
-| **option.WithDebugOption()**             | `bool`  | If `True`, enables debug logging                                                                                                                       | `False`        |
+| **option.WithMaxTurns()**         | `int`   | The maximum number of conversational turns allowed                                                                                                     | `float("inf")` |
+| **option.WithModel()**    | `string`   | An optional string to override the model being used by an Agent                                                                                        | `None`         |
+| **option.WithExecuteTools()**     | `bool`  | If `False`, interrupt execution and immediately returns `tool_calls` message when an Agent tries to call a function                                    | `True`         |
+| **option.WithStream()**            | `bool`  | If `True`, enables streaming responses                                                                                                                 | `False`        |
+| **option.WithDebug()**             | `bool`  | If `True`, enables debug logging                                                                                                                       | `False`        |
 
 Once `client.run()` is finished (after potentially multiple calls to agents and tools) it will return a `Response` containing all the relevant updated state. Specifically, the new `messages`, the last `Agent` to be called, and the most up-to-date `context_variables`. You can pass these values (plus new user messages) in to your next execution of `client.run()` to continue the interaction where it left off – much like `chat.completions.create()`. (The `run_demo_loop` function implements an example of a full execution loop in `/swarm/repl/repl.py`.)
 
@@ -164,7 +164,8 @@ Once `client.run()` is finished (after potentially multiple calls to agents and 
 | --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Messages**          | `List`  | A list of message objects generated during the conversation. Very similar to [Chat Completions `messages`](https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages), but with a `sender` field indicating which `Agent` the message originated from. |
 | **Agent**             | `Agent` | The last agent to handle a message.                                                                                                                                                                                                                                          |
-| **ContextVariables** | `dict`  | The same as the input variables, plus any changes.                                                                                                                                                                                                                           |
+
+> note) Context variable changes are made using ctx.
 
 ## Agents
 
@@ -176,11 +177,11 @@ While it's tempting to personify an `Agent` as "someone who does X", it can also
 
 | Field            | Type                     | Description                                                                   | Default                      |
 | ---------------- | ------------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
-| **option.WithAgentName()**         | `str`                    | The name of the agent.                                                        | `"Agent"`                    |
-| **option.WithAgentModel()**        | `str`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
-| **option.WithAgentInstructions()** | `str` or `func() -> str` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
+| **option.WithAgentName()**         | `string`                    | The name of the agent.                                                        | `"Agent"`                    |
+| **option.WithAgentModel()**        | `string`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
+| **option.WithAgentInstructions()** | `string` or `func(Context) -> string` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
 | **option.WithAgentFunctions()**    | `List`                   | A list of functions that the agent can call.                                  | `[]`                         |
-| **option.WithAgentToolChoice()**  | `str`                    | The tool choice for the agent, if any.                                        | `None`                       |
+| **option.WithAgentToolChoice()**  | `string`                    | The tool choice for the agent, if any.                                        | `None`                       |
 
 ### Instructions
 
