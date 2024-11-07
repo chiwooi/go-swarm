@@ -176,7 +176,7 @@ While it's tempting to personify an `Agent` as "someone who does X", it can also
 
 | Field            | Type                     | Description                                                                   | Default                      |
 | ---------------- | ------------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
-| **name**         | `str`                    | The name of the agent.                                                        | `"Agent"`                    |
+| **option.WithAgentName()**         | `str`                    | The name of the agent.                                                        | `"Agent"`                    |
 | **option.WithAgentModel()**        | `str`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
 | **option.WithAgentInstructions()** | `str` or `func() -> str` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
 | **option.WithAgentFunctions()**    | `List`                   | A list of functions that the agent can call.                                  | `[]`                         |
@@ -202,18 +202,19 @@ func Instructions(ctx goswarm.Context) string {
 }
 
 func main() {
-    ctx := goswarm.NewContext(context.Background())
+   ctx := goswarm.NewContext(context.Background())
 
-	agent := goswarm.NewAgent(
-	   option.WithAgentInstructions(Instructions),
-	)
+   agent := goswarm.NewAgent(
+      option.WithAgentInstructions(Instructions),
+   )
 
-    ctx.SetVariables(types.ContextVariables{"user_name":"John"})
+   ctx.SetVariables(types.ContextVariables{"user_name":"John"})
 
-	messages := goswarm.NewMessages(openai.UserMessage("Hi!"))
-	resp := client.Run(ctx, agent, messages)
+   messages := goswarm.NewMessages(openai.UserMessage("Hi!"))
+   resp := client.Run(ctx, agent, messages)
 
-	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
+   fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
+}
 ```
 
 ```
@@ -242,25 +243,26 @@ func Greet(ctx goswarm.Context, args GreetArgs) string {
    } else {
      greeting = "Hello"
    }
+
    fmt.Printf("%s, %s!", greeting, userName)
 
    return "Done"
 }
 
 func main() {
-    ctx := goswarm.NewContext(context.Background())
+   ctx := goswarm.NewContext(context.Background())
 
-	agent := goswarm.NewAgent(
-       option.WithAgentName("Agent"),
-	   option.WithAgentFunctions(Greet),
-	)
+   agent := goswarm.NewAgent(
+      option.WithAgentName("Agent"),
+      option.WithAgentFunctions(Greet),
+   )
 
-    ctx.SetVariables(types.ContextVariables{"user_name":"John"})
+   ctx.SetVariables(types.ContextVariables{"user_name":"John"})
 
-	messages := goswarm.NewMessages(openai.UserMessage("Use greet() please."))
-	resp := client.Run(ctx, agent, messages)
+   messages := goswarm.NewMessages(openai.UserMessage("Use greet() please."))
+   resp := client.Run(ctx, agent, messages)
 
-	fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
+   fmt.Println(resp.Messages[len(resp.Messages)-1].(openai.ChatCompletionMessage).Content)
 }
 ```
 
@@ -281,7 +283,7 @@ ctx := goswarm.NewContext(context.Background())
 salesAgent := goswarm.NewAgent(option.WithAgentName("Sales Agent"))
 
 transferToSales := func(ctx goswarm.Context) *types.Agent {
-	return salesAgent
+   return salesAgent
 }
 
 agent := goswarm.NewAgent(
@@ -307,14 +309,14 @@ ctx := goswarm.NewContext(context.Background())
 salesAgent := goswarm.NewAgent("Sales Agent")
 
 talkToSales := func(ctx goswarm.Context) *types.Result {
-	fmt.Println("Hello, World!")
+   fmt.Println("Hello, World!")
 
-    ctx.SetVariable("department", "sales")
+   ctx.SetVariable("department", "sales")
 
-	return &types.Result{
-		Value: "Done",
-		Agent: salesAgent,
-	}
+   return &types.Result{
+      Value: "Done",
+      Agent: salesAgent,
+   }
 }
 
 agent := goswarm.NewAgent(
@@ -350,26 +352,26 @@ Swarm automatically converts functions into a JSON Schema that is passed into Ch
 ```go
 
 type GreetArgs struct {
-	Name     string `json:"name"     desc:"Name of the user"     required:"true"`
-	Age      int    `json:"age"      desc:"Age of the user"      required:"true"`
-	Location string `json:"location" desc:"Best place on earth."`
+   Name     string `json:"name"     desc:"Name of the user"     required:"true"`
+   Age      int    `json:"age"      desc:"Age of the user"      required:"true"`
+   Location string `json:"location" desc:"Best place on earth."`
 }
 
 func Greet(ctx goswarm.Context, args GreetArgs) string {
-	if ctx.IsAnalyze() {
-		ctx.SetDescription(
+   if ctx.IsAnalyze() {
+      ctx.SetDescription(
 `Greets the user. Make sure to get their name and age before calling.
 
    Args:
       name: Name of the user.
       age: Age of the user.
       location: Best place on earth.`)
-		return ""
-	}
+      return ""
+   }
 
-	if args.Location == "" {
-		args.Location = "New York"
-	}
+   if args.Location == "" {
+      args.Location = "New York"
+   }
 
    fmt.Printf("Hello %s, glad you are %d in %s!\n", args.Name, args.Age, args.Location)
 
@@ -401,7 +403,7 @@ func Greet(ctx goswarm.Context, args GreetArgs) string {
 ```go
 stream := client.RunAndStream(ctx, agent, messages, types.Args{}, option.WithStream(true))
 for chunk := range stream {
-	print(chunk)
+   print(chunk)
 }
 ```
 
@@ -428,7 +430,7 @@ repl.RunDemoLoop(ctx, agent, option.WithStream(true))
 
 # Core Contributors
 
-- chiwoo - [ibigio](https://github.com/chiwooi)
+- chiwoo - [chiwooi](https://github.com/chiwooi)
 
 
 
