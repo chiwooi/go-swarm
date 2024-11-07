@@ -163,7 +163,9 @@ func (s *Swarm) HandleToolCalls(ctx Context, toolCalls []openai.ChatCompletionMe
 			continue
 		}
 
-		fmt.Printf("Calling function %s with args: %+v\n", name, args)
+		if debug {
+			fmt.Printf("Calling function %s with args: %+v\n", name, args)
+		}
 
 		rawResult := callFuncByArgs(ctx, functionMap[name], args)
 
@@ -216,12 +218,14 @@ func (s *Swarm) RunAndStream(ctx Context, agent *types.Agent, messages []openai.
 			acc := openai.ChatCompletionAccumulator{}
 
 			responseChan <- "start"
+
 			// Handle streaming chunks here
 			for stream.Next() {
 				chunk := stream.Current()
 				responseChan <- chunk
 				acc.AddChunk(chunk)
 			}
+
 			responseChan <- "end"
 
 			if err := stream.Err(); err != nil {

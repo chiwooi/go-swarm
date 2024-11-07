@@ -76,9 +76,24 @@ func ProcessAndPrintStreamingResponse(response <-chan any) *types.Response {
     return nil
 }
 
+func convertToMessage(param openai.ChatCompletionMessageParamUnion) openai.ChatCompletionMessage {
+    switch v := param.(type) {
+    case openai.ChatCompletionMessage:
+        return v
+    case openai.ChatCompletionMessageParam:
+        return openai.ChatCompletionMessage{
+            Role:         openai.ChatCompletionMessageRole(v.Role.Value),
+            Content:      v.Content.String(),
+            FunctionCall: v.FunctionCall.Value.(openai.ChatCompletionMessageFunctionCall),
+            ToolCalls:    v.ToolCalls.Value.([]openai.ChatCompletionMessageToolCall),
+        }
+    }
+    return openai.ChatCompletionMessage{}
+}
+
 func PrettyPrintMessages(messages []openai.ChatCompletionMessageParamUnion) {
     for _, message := range messages {
-        msg := message.(openai.ChatCompletionMessage)
+        msg := convertToMessage(message)
         if msg.Role != "assistant" {
             continue
         }

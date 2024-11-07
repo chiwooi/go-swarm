@@ -80,7 +80,7 @@ func functionToJSON(ctx Context, f any) (openai.ChatCompletionToolParam, error) 
 		Function: openai.F(openai.FunctionDefinitionParam{
 			Name:        openai.String(fnName),
 			Description: openai.String(ctx.GetDescription()),
-			Parameters: openai.F(openai.FunctionParameters{
+			Parameters:  openai.F(openai.FunctionParameters{
 				"type":       "object",
 				"properties": parameters,
 				"required":   requireds,
